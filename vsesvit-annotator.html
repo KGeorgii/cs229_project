@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vsesvit Annotator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+
+  :root {
+    --bg: #0d0d0d;
+    --surface: #161616;
+    --border: #2a2a2a;
+    --accent: #e8d5a3;
+    --accent2: #7eb8d4;
+    --danger: #d45f5f;
+    --success: #5fd47e;
+    --text: #e0e0e0;
+    --muted: #666;
+
+    --c0: #f5a623;
+    --c1: #e8d5a3;
+    --c2: #7eb8d4;
+    --c3: #b39ddb;
+    --c4: #81c784;
+    --c5: #ff8a65;
+    --c6: #f06292;
+    --c7: #4db6ac;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 13px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  #topbar h1 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+  }
+
+  .sep { width: 1px; height: 20px; background: var(--border); }
+
+  #topbar label {
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  input[type="text"], input[type="number"], select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 2px;
+    outline: none;
+  }
+  input[type="text"]:focus, input[type="number"]:focus, select:focus {
+    border-color: var(--accent);
+  }
+  input[type="number"] { width: 52px; }
+
+  button {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+    white-space: nowrap;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.primary { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+  button.primary:hover { background: #f5e9c0; }
+  button.danger { border-color: var(--danger); color: var(--danger); }
+  button.danger:hover { background: var(--danger); color: #000; }
+
+  #meta-fields { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  #main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  #left-panel {
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    padding: 10px 12px 6px;
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase;
+  }
+
+  #file-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+  #file-list::-webkit-scrollbar { width: 4px; }
+  #file-list::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .file-item {
+    padding: 6px 12px;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: all 0.1s;
+  }
+  .file-item:hover { color: var(--text); background: #1e1e1e; }
+  .file-item.active { color: var(--accent); border-left-color: var(--accent); background: #1e1e1e; }
+  .file-item.annotated { color: var(--success); }
+  .file-item.annotated.active { color: var(--success); border-left-color: var(--success); }
+
+  #load-btn-wrap {
+    padding: 8px;
+    border-top: 1px solid var(--border);
+  }
+  #load-btn-wrap button { width: 100%; }
+
+  #canvas-wrap {
+    flex: 1;
+    overflow: auto;
+    background: #111;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    position: relative;
+  }
+
+  #canvas-container {
+    position: relative;
+    display: inline-block;
+    cursor: crosshair;
+    user-select: none;
+  }
+
+  #page-canvas {
+    display: block;
+  }
+
+  #anno-svg {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+
+  #draw-rect {
+    position: absolute;
+    border: 2px solid white;
+    pointer-events: none;
+    display: none;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.5);
+  }
+
+  #right-panel {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #class-selector {
+    padding: 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .class-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    border-radius: 2px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    text-align: left;
+    transition: all 0.1s;
+  }
+  .class-btn:hover { color: var(--text); background: #1e1e1e; }
+  .class-btn.selected { border-color: var(--class-color); color: var(--class-color); background: #1e1e1e; }
+
+  .class-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--class-color);
+    flex-shrink: 0;
+  }
+
+  .class-key {
+    margin-left: auto;
+    opacity: 0.4;
+    font-size: 9px;
+  }
+
+  #anno-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+  #anno-list::-webkit-scrollbar { width: 4px; }
+  #anno-list::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .anno-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    transition: all 0.1s;
+  }
+  .anno-item:hover { background: #1e1e1e; }
+  .anno-item.selected { background: #1e1e1e; }
+
+  .anno-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  .anno-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .anno-del {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 2px;
+    line-height: 1;
+    opacity: 0.5;
+    transition: opacity 0.1s;
+  }
+  .anno-del:hover { opacity: 1; color: var(--danger); }
+
+  #bottom-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  #status {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  #page-nav {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+  #page-nav span {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    min-width: 60px;
+    text-align: center;
+  }
+
+  #export-modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+  #export-modal.open { display: flex; }
+
+  #export-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    width: 600px;
+    max-height: 80vh;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #export-box .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  #export-box .modal-header h2 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  #export-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+  }
+  .export-tab {
+    padding: 8px 16px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    background: none;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-radius: 0;
+  }
+  .export-tab:hover { color: var(--text); border-color: transparent; }
+  .export-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  #export-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+  }
+
+  #export-textarea {
+    width: 100%;
+    height: 300px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    padding: 8px;
+    resize: none;
+    border-radius: 2px;
+    outline: none;
+  }
+
+  #export-actions {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    justify-content: flex-end;
+  }
+
+  .instructions {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 10px;
+  }
+  .instructions code {
+    background: var(--bg);
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--accent2);
+  }
+
+  #zoom-controls {
+    display: flex; gap: 4px; align-items: center;
+  }
+  #zoom-level {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    width: 40px;
+    text-align: center;
+    color: var(--muted);
+  }
+
+  #tooltip {
+    position: fixed;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 4px 8px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    border-radius: 2px;
+    pointer-events: none;
+    z-index: 500;
+    display: none;
+  }
+
+  .kbd {
+    display: inline-block;
+    background: #252525;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 1px 5px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text);
+  }
+
+  #help-row {
+    display: flex;
+    gap: 16px;
+    padding: 4px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1>VSESVIT ANNOTATOR</h1>
+  <div class="sep"></div>
+  <div id="meta-fields">
+    <label>journal</label>
+    <input type="text" id="meta-journal" placeholder="Всесвіт" value="Всесвіт" style="width:90px">
+    <label>year</label>
+    <input type="text" id="meta-year" placeholder="1967" style="width:50px">
+    <label>issue</label>
+    <input type="text" id="meta-issue" placeholder="No. 1" style="width:60px">
+    <label>source url</label>
+    <input type="text" id="meta-uri" placeholder="https://chtyvo.org.ua/..." style="width:200px">
+  </div>
+  <div style="margin-left:auto;display:flex;gap:6px">
+    <button onclick="openExport()">Export ↓</button>
+    <button onclick="importData()">Import ↑</button>
+    <button class="primary" onclick="savePage()">Save Page</button>
+  </div>
+</div>
+
+<div id="help-row">
+  <span><span class="kbd">1–8</span> select class</span>
+  <span><span class="kbd">Del</span> delete selected</span>
+  <span><span class="kbd">Esc</span> deselect</span>
+  <span><span class="kbd">←/→</span> prev/next page</span>
+  <span><span class="kbd">+/−</span> zoom</span>
+  <span><span class="kbd">S</span> save page</span>
+</div>
+
+<div id="main">
+
+  <div id="left-panel">
+    <div class="panel-header">Pages</div>
+    <div id="file-list"></div>
+    <div id="load-btn-wrap">
+      <button onclick="document.getElementById('pdf-input').click()">Load PDF(s)</button>
+      <input type="file" id="pdf-input" accept=".pdf" multiple style="display:none" onchange="loadPDFs(this.files)">
+    </div>
+  </div>
+
+  <div id="canvas-wrap">
+    <div id="canvas-container">
+      <canvas id="page-canvas"></canvas>
+      <svg id="anno-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div id="draw-rect"></div>
+    </div>
+  </div>
+
+  <div id="right-panel">
+    <div class="panel-header">Label</div>
+    <div id="class-selector"></div>
+    <div class="panel-header" style="margin-top:0">Annotations</div>
+    <div id="anno-list"></div>
+    <div id="bottom-bar">
+      <div id="page-nav">
+        <button onclick="prevPage()">←</button>
+        <span id="page-indicator">– / –</span>
+        <button onclick="nextPage()">→</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="display:flex;align-items:center;gap:12px;padding:4px 12px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0">
+  <div id="status">No file loaded. Drop a PDF to begin.</div>
+  <div style="margin-left:auto;display:flex;gap:4px;align-items:center">
+    <span style="font-size:10px;color:var(--muted)">zoom</span>
+    <div id="zoom-controls">
+      <button onclick="setZoom(zoom-0.1)">−</button>
+      <span id="zoom-level">100%</span>
+      <button onclick="setZoom(zoom+0.1)">+</button>
+      <button onclick="setZoom(1)">⌂</button>
+    </div>
+  </div>
+</div>
+
+<div id="export-modal">
+  <div id="export-box">
+    <div class="modal-header">
+      <h2>EXPORT DATASET</h2>
+      <button onclick="closeExport()" style="border:none;background:none;font-size:18px;color:var(--muted);cursor:pointer">×</button>
+    </div>
+    <div id="export-tabs">
+      <button class="export-tab active" onclick="switchTab('jsonl')">JSONL (HF)</button>
+      <button class="export-tab" onclick="switchTab('yolo')">YOLO TXT</button>
+      <button class="export-tab" onclick="switchTab('pesp')">PESP Parquet</button>
+    </div>
+    <div id="export-content">
+      <p class="instructions">
+        JSONL format compatible with HuggingFace Datasets. Each line is one page, matching the PESP schema.<br>
+        Fields: <code>filename</code>, <code>journal</code>, <code>year</code>, <code>issue</code>, <code>uri</code>, <code>yolo</code>, <code>yolo_predictions</code>.<br><br>
+        To merge with PESP: <code>datasets.concatenate_datasets([pesp, load_dataset('json', data_files='vsesvit.jsonl')])</code>
+      </p>
+      <textarea id="export-textarea" readonly></textarea>
+    </div>
+    <div id="export-actions">
+      <button onclick="copyExport()">Copy</button>
+      <button class="primary" onclick="downloadExport()">Download</button>
+      <button onclick="closeExport()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const CLASSES = [
+  { id: 0, name: 'journal_name',       color: '#f5a623', key: '1', pesp: 'journal_name' },
+  { id: 1, name: 'article_title',      color: '#e8d5a3', key: '2', pesp: 'title' },
+  { id: 2, name: 'author_name',        color: '#7eb8d4', key: '3', pesp: 'author_name' },
+  { id: 3, name: 'page_number',        color: '#b39ddb', key: '4', pesp: 'page_number' },
+  { id: 4, name: 'text_block',         color: '#81c784', key: '5', pesp: 'textblock' },
+  { id: 5, name: 'image',              color: '#ff8a65', key: '6', pesp: 'image' },
+  { id: 6, name: 'mixed_text',         color: '#f06292', key: '7', pesp: 'mixedtext' },
+  { id: 7, name: 'decorative_element', color: '#4db6ac', key: '8', pesp: 'decorative_element' },
+];
+
+let pages = [];          
+let currentPageIdx = -1;
+let annotations = [];    
+let selectedAnnoId = null;
+let activeClass = 0;
+let zoom = 1.0;
+let exportTab = 'jsonl';
+
+let drawing = false;
+let drawStart = {x:0, y:0};
+let canvasW = 0, canvasH = 0;
+
+let dataStore = {};  
+let metaStore = {};    
+
+buildClassSelector();
+renderFileList();
+
+function buildClassSelector() {
+  const el = document.getElementById('class-selector');
+  el.innerHTML = '';
+  CLASSES.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'class-btn' + (c.id === activeClass ? ' selected' : '');
+    btn.style.setProperty('--class-color', c.color);
+    btn.innerHTML = `<span class="class-dot" style="background:${c.color}"></span>${c.name}<span class="class-key">${c.key}</span>`;
+    btn.onclick = () => selectClass(c.id);
+    el.appendChild(btn);
+  });
+}
+
+function selectClass(id) {
+  activeClass = id;
+  buildClassSelector();
+}
+
+async function loadPDFs(files) {
+  for (const file of files) {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
+    const numPages = pdfDoc.numPages;
+    for (let i = 1; i <= numPages; i++) {
+      const page = await pdfDoc.getPage(i);
+      const vp = page.getViewport({scale: 1.0});
+      pages.push({
+        pdfName: file.name.replace('.pdf',''),
+        pageNum: i,
+        pdfDoc,
+        pdfPage: page,
+        width: vp.width,
+        height: vp.height,
+      });
+    }
+  }
+  renderFileList();
+  if (pages.length > 0 && currentPageIdx < 0) loadPage(0);
+}
+
+function pageKey(p) {
+  return `${p.pdfName}__p${p.pageNum}`;
+}
+
+function renderFileList() {
+  const el = document.getElementById('file-list');
+  el.innerHTML = '';
+  pages.forEach((p, i) => {
+    const key = pageKey(p);
+    const div = document.createElement('div');
+    div.className = 'file-item' + (i === currentPageIdx ? ' active' : '') + (dataStore[key] ? ' annotated' : '');
+    div.textContent = `${p.pdfName} p.${p.pageNum}`;
+    div.title = `${p.pdfName} — page ${p.pageNum}`;
+    div.onclick = () => { savePage(); loadPage(i); };
+    el.appendChild(div);
+  });
+}
+
+async function loadPage(idx) {
+  if (idx < 0 || idx >= pages.length) return;
+  savePage();
+  currentPageIdx = idx;
+  const p = pages[idx];
+  const key = pageKey(p);
+
+  const meta = metaStore[key] || {};
+  document.getElementById('meta-journal').value = meta.journal || 'Всесвіт';
+  document.getElementById('meta-year').value = meta.year || '';
+  document.getElementById('meta-issue').value = meta.issue || '';
+  document.getElementById('meta-uri').value = meta.uri || '';
+
+  const canvas = document.getElementById('page-canvas');
+  const ctx = canvas.getContext('2d');
+  const vp = p.pdfPage.getViewport({scale: zoom});
+  canvas.width = vp.width;
+  canvas.height = vp.height;
+  canvasW = vp.width;
+  canvasH = vp.height;
+
+  await p.pdfPage.render({canvasContext: ctx, viewport: vp}).promise;
+
+  const stored = dataStore[key] || [];
+  annotations = stored.map((a, i) => ({
+    id: i,
+    classId: a.classId,
+    x: (a.cx - a.w/2) * canvasW,
+    y: (a.cy - a.h/2) * canvasH,
+    w: a.w * canvasW,
+    h: a.h * canvasH,
+  }));
+  selectedAnnoId = null;
+
+  renderAnnotations();
+  renderAnnoList();
+  updatePageIndicator();
+  renderFileList();
+  setStatus(`Page ${p.pageNum} of ${p.pdfDoc.numPages} — ${p.pdfName}`);
+}
+
+function savePage() {
+  if (currentPageIdx < 0 || pages.length === 0) return;
+  const p = pages[currentPageIdx];
+  const key = pageKey(p);
+
+  dataStore[key] = annotations.map(a => ({
+    classId: a.classId,
+    cx: (a.x + a.w/2) / canvasW,
+    cy: (a.y + a.h/2) / canvasH,
+    w: a.w / canvasW,
+    h: a.h / canvasH,
+  }));
+
+  metaStore[key] = {
+    journal: document.getElementById('meta-journal').value,
+    year: document.getElementById('meta-year').value,
+    issue: document.getElementById('meta-issue').value,
+    uri: document.getElementById('meta-uri').value,
+  };
+
+  renderFileList();
+}
+
+function prevPage() { if (currentPageIdx > 0) { savePage(); loadPage(currentPageIdx - 1); } }
+function nextPage() { if (currentPageIdx < pages.length - 1) { savePage(); loadPage(currentPageIdx + 1); } }
+
+function updatePageIndicator() {
+  const el = document.getElementById('page-indicator');
+  el.textContent = pages.length ? `${currentPageIdx+1} / ${pages.length}` : '– / –';
+}
+
+// ── DRAWING ──
+const container = document.getElementById('canvas-container');
+const drawRect = document.getElementById('draw-rect');
+
+container.addEventListener('mousedown', e => {
+  if (e.target !== document.getElementById('page-canvas') && e.target !== document.getElementById('anno-svg')) return;
+  if (currentPageIdx < 0) return;
+  drawing = true;
+  const r = container.getBoundingClientRect();
+  drawStart = { x: e.clientX - r.left, y: e.clientY - r.top };
+  drawRect.style.display = 'block';
+  drawRect.style.left = drawStart.x + 'px';
+  drawRect.style.top = drawStart.y + 'px';
+  drawRect.style.width = '0px';
+  drawRect.style.height = '0px';
+  drawRect.style.borderColor = CLASSES[activeClass].color;
+  e.preventDefault();
+});
+
+document.addEventListener('mousemove', e => {
+  if (!drawing) return;
+  const r = container.getBoundingClientRect();
+  const cx = e.clientX - r.left;
+  const cy = e.clientY - r.top;
+  const x = Math.min(cx, drawStart.x);
+  const y = Math.min(cy, drawStart.y);
+  const w = Math.abs(cx - drawStart.x);
+  const h = Math.abs(cy - drawStart.y);
+  drawRect.style.left = x + 'px';
+  drawRect.style.top = y + 'px';
+  drawRect.style.width = w + 'px';
+  drawRect.style.height = h + 'px';
+});
+
+document.addEventListener('mouseup', e => {
+  if (!drawing) return;
+  drawing = false;
+  drawRect.style.display = 'none';
+  const r = container.getBoundingClientRect();
+  const cx = e.clientX - r.left;
+  const cy = e.clientY - r.top;
+  let x = Math.min(cx, drawStart.x);
+  let y = Math.min(cy, drawStart.y);
+  let w = Math.abs(cx - drawStart.x);
+  let h = Math.abs(cy - drawStart.y);
+  if (w < 5 || h < 5) return;
+
+  x = Math.max(0, Math.min(x, canvasW));
+  y = Math.max(0, Math.min(y, canvasH));
+  w = Math.min(w, canvasW - x);
+  h = Math.min(h, canvasH - y);
+
+  const id = Date.now();
+  annotations.push({ id, classId: activeClass, x, y, w, h });
+  selectedAnnoId = id;
+  renderAnnotations();
+  renderAnnoList();
+});
+
+function renderAnnotations() {
+  const svg = document.getElementById('anno-svg');
+  svg.innerHTML = '';
+  annotations.forEach(a => {
+    const cls = CLASSES[a.classId];
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.style.pointerEvents = 'all';
+    g.style.cursor = 'pointer';
+
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', a.x);
+    rect.setAttribute('y', a.y);
+    rect.setAttribute('width', a.w);
+    rect.setAttribute('height', a.h);
+    rect.setAttribute('fill', a.id === selectedAnnoId ? cls.color + '33' : cls.color + '1a');
+    rect.setAttribute('stroke', cls.color);
+    rect.setAttribute('stroke-width', a.id === selectedAnnoId ? '2' : '1.5');
+    rect.setAttribute('stroke-dasharray', a.id === selectedAnnoId ? 'none' : 'none');
+
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('x', a.x + 3);
+    text.setAttribute('y', a.y + 11);
+    text.setAttribute('font-size', '10');
+    text.setAttribute('font-family', 'IBM Plex Mono, monospace');
+    text.setAttribute('fill', cls.color);
+    text.setAttribute('paint-order', 'stroke');
+    text.setAttribute('stroke', '#0d0d0d');
+    text.setAttribute('stroke-width', '3');
+    text.textContent = cls.name;
+
+    g.appendChild(rect);
+    g.appendChild(text);
+    g.onclick = (e) => { e.stopPropagation(); selectAnno(a.id); };
+    svg.appendChild(g);
+  });
+}
+
+function selectAnno(id) {
+  selectedAnnoId = selectedAnnoId === id ? null : id;
+  renderAnnotations();
+  renderAnnoList();
+}
+
+document.getElementById('page-canvas').addEventListener('click', () => {
+  selectedAnnoId = null;
+  renderAnnotations();
+  renderAnnoList();
+});
+
+function renderAnnoList() {
+  const el = document.getElementById('anno-list');
+  el.innerHTML = '';
+  annotations.forEach((a, i) => {
+    const cls = CLASSES[a.classId];
+    const div = document.createElement('div');
+    div.className = 'anno-item' + (a.id === selectedAnnoId ? ' selected' : '');
+    div.innerHTML = `
+      <span class="anno-dot" style="background:${cls.color}"></span>
+      <span class="anno-label">${i+1}. ${cls.name}</span>
+      <button class="anno-del" title="Delete" onclick="deleteAnno(${a.id});event.stopPropagation()">×</button>
+    `;
+    div.onclick = () => selectAnno(a.id);
+    el.appendChild(div);
+  });
+}
+
+function deleteAnno(id) {
+  annotations = annotations.filter(a => a.id !== id);
+  if (selectedAnnoId === id) selectedAnnoId = null;
+  renderAnnotations();
+  renderAnnoList();
+}
+
+function deleteSelected() {
+  if (selectedAnnoId !== null) deleteAnno(selectedAnnoId);
+}
+
+function setZoom(z) {
+  zoom = Math.max(0.3, Math.min(4.0, z));
+  document.getElementById('zoom-level').textContent = Math.round(zoom*100) + '%';
+  if (currentPageIdx >= 0) {
+    const p = pages[currentPageIdx];
+    const key = pageKey(p);
+    savePage();
+    renderPageAtZoom(p);
+  }
+}
+
+async function renderPageAtZoom(p) {
+  const canvas = document.getElementById('page-canvas');
+  const ctx = canvas.getContext('2d');
+  const vp = p.pdfPage.getViewport({scale: zoom});
+  canvas.width = vp.width;
+  canvas.height = vp.height;
+  canvasW = vp.width;
+  canvasH = vp.height;
+  await p.pdfPage.render({canvasContext: ctx, viewport: vp}).promise;
+
+  const key = pageKey(p);
+  const stored = dataStore[key] || [];
+  annotations = stored.map((a, i) => ({
+    id: i,
+    classId: a.classId,
+    x: (a.cx - a.w/2) * canvasW,
+    y: (a.cy - a.h/2) * canvasH,
+    w: a.w * canvasW,
+    h: a.h * canvasH,
+  }));
+  renderAnnotations();
+  renderAnnoList();
+}
+
+function buildYOLOString(annos) {
+  return annos.map(a => {
+    const cx = a.cx.toFixed(6);
+    const cy = a.cy.toFixed(6);
+    const w = a.w.toFixed(6);
+    const h = a.h.toFixed(6);
+    return `${a.classId} ${cx} ${cy} ${w} ${h}`;
+  }).join('\n');
+}
+
+function buildYOLOPredictions(annos) {
+  return annos.map(a => ({
+    label: CLASSES[a.classId].pesp,
+    x: a.cx - a.w/2,
+    y: a.cy - a.h/2,
+    w: a.w,
+    h: a.h,
+  }));
+}
+
+function buildJSONL() {
+  const lines = [];
+  for (const [key, annos] of Object.entries(dataStore)) {
+    if (!annos || annos.length === 0) continue;
+    const meta = metaStore[key] || {};
+    const parts = key.split('__p');
+    const pdfName = parts[0];
+    const pageNum = parseInt(parts[1]);
+    const filename = `${pdfName}_${pageNum}`;
+    const row = {
+      filename,
+      journal: meta.journal || 'Всесвіт',
+      year: meta.year || '',
+      issue: meta.issue || '',
+      uri: meta.uri || '',
+      yolo: buildYOLOString(annos),
+      yolo_predictions: buildYOLOPredictions(annos),
+    };
+    lines.push(JSON.stringify(row));
+  }
+  return lines.join('\n');
+}
+
+function buildYOLOTxt() {
+  const parts = [];
+  for (const [key, annos] of Object.entries(dataStore)) {
+    if (!annos || annos.length === 0) continue;
+    parts.push(`# ${key}`);
+    parts.push(buildYOLOString(annos));
+    parts.push('');
+  }
+  return parts.join('\n');
+}
+
+function buildPESPInstructions() {
+  return `# PESP-Compatible Parquet Export Instructions
+# 
+# 1. Save the JSONL export as "vsesvit.jsonl"
+# 
+# 2. In Python:
+# 
+#    from datasets import load_dataset, concatenate_datasets
+#    
+#    # Load your new data
+#    vsesvit = load_dataset("json", data_files="vsesvit.jsonl", split="train")
+#    
+#    # Load PESP
+#    pesp = load_dataset("apjanco/pesp", split="train")
+#    
+#    # Align schemas (PESP has extra columns; add empty ones to vsesvit)
+#    def add_missing_cols(example):
+#        example["dpul"] = example.get("dpul", "")
+#        example["text"] = ""
+#        example["images_meta"] = ""
+#        return example
+#    
+#    vsesvit = vsesvit.map(add_missing_cols)
+#    
+#    # Concatenate
+#    combined = concatenate_datasets([pesp, vsesvit])
+#    
+#    # Save as parquet
+#    combined.to_parquet("pesp_vsesvit_combined.parquet")
+# 
+# 3. Class mapping (Vsesvit class_id -> PESP label):
+${CLASSES.map(c => `#    ${c.id}: ${c.name} -> "${c.pesp}"`).join('\n')}
+# 
+# 4. For YOLO training, your data.yaml:
+# 
+#    names:
+${CLASSES.map(c => `#      ${c.id}: ${c.name}`).join('\n')}
+`;
+}
+
+function openExport() {
+  savePage();
+  document.getElementById('export-modal').classList.add('open');
+  refreshExportContent();
+}
+
+function closeExport() {
+  document.getElementById('export-modal').classList.remove('open');
+}
+
+function switchTab(tab) {
+  exportTab = tab;
+  document.querySelectorAll('.export-tab').forEach(b => {
+    b.classList.toggle('active', b.textContent.toLowerCase().includes(tab.replace('jsonl','jsonl').replace('yolo','yolo').replace('pesp','pesp').split(' ')[0]));
+  });
+  refreshExportContent();
+}
+
+function refreshExportContent() {
+  const ta = document.getElementById('export-textarea');
+  const content = document.getElementById('export-content');
+  if (exportTab === 'jsonl') {
+    content.querySelector('.instructions').innerHTML = `
+      JSONL format compatible with HuggingFace Datasets. Each line = one annotated page, matching the PESP schema.<br>
+      Fields: <code>filename</code>, <code>journal</code>, <code>year</code>, <code>issue</code>, <code>uri</code>, <code>yolo</code>, <code>yolo_predictions</code>.<br><br>
+      To merge with PESP: <code>concatenate_datasets([pesp, load_dataset('json', data_files='vsesvit.jsonl')])</code>
+    `;
+    ta.value = buildJSONL();
+  } else if (exportTab === 'yolo') {
+    content.querySelector('.instructions').innerHTML = `
+      YOLO format: one file per page, each line is <code>class_id cx cy w h</code> (normalized, center-based).<br>
+      Class IDs: ${CLASSES.map(c => `<code>${c.id}=${c.name}</code>`).join(', ')}.
+    `;
+    ta.value = buildYOLOTxt();
+  } else {
+    content.querySelector('.instructions').innerHTML = `
+      Instructions for merging with PESP and creating a Parquet dataset for HuggingFace.
+    `;
+    ta.value = buildPESPInstructions();
+  }
+}
+
+function copyExport() {
+  navigator.clipboard.writeText(document.getElementById('export-textarea').value);
+  setStatus('Copied to clipboard!');
+}
+
+function downloadExport() {
+  const text = document.getElementById('export-textarea').value;
+  const ext = exportTab === 'jsonl' ? 'jsonl' : exportTab === 'yolo' ? 'txt' : 'py';
+  const name = `vsesvit_annotations.${ext}`;
+  const blob = new Blob([text], {type: 'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+}
+
+function importData() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.jsonl,.json';
+  input.onchange = async e => {
+    const file = e.target.files[0];
+    const text = await file.text();
+    const lines = text.split('\n').filter(l => l.trim());
+    let count = 0;
+    for (const line of lines) {
+      try {
+        const row = JSON.parse(line);
+        const key = row.filename;
+        if (row.yolo) {
+          dataStore[key] = row.yolo.split('\n').filter(l=>l.trim()).map(l => {
+            const [cls, cx, cy, w, h] = l.split(' ').map(Number);
+            return {classId: cls, cx, cy, w, h};
+          });
+        }
+        if (!metaStore[key]) {
+          metaStore[key] = {journal: row.journal, year: row.year, issue: row.issue, uri: row.uri};
+        }
+        count++;
+      } catch(err) {}
+    }
+    setStatus(`Imported ${count} pages`);
+    renderFileList();
+  };
+  input.click();
+}
+
+function setStatus(msg) {
+  document.getElementById('status').textContent = msg;
+}
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+  if (e.key >= '1' && e.key <= '8') {
+    selectClass(parseInt(e.key) - 1);
+  } else if (e.key === 'Delete' || e.key === 'Backspace') {
+    deleteSelected();
+  } else if (e.key === 'Escape') {
+    selectedAnnoId = null;
+    renderAnnotations();
+    renderAnnoList();
+  } else if (e.key === 'ArrowRight') {
+    nextPage();
+  } else if (e.key === 'ArrowLeft') {
+    prevPage();
+  } else if (e.key === '+' || e.key === '=') {
+    setZoom(zoom + 0.1);
+  } else if (e.key === '-') {
+    setZoom(zoom - 0.1);
+  } else if (e.key === 's' || e.key === 'S') {
+    savePage();
+    setStatus('Saved');
+  }
+});
+
+document.body.addEventListener('dragover', e => e.preventDefault());
+document.body.addEventListener('drop', e => {
+  e.preventDefault();
+  const files = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.pdf'));
+  if (files.length) loadPDFs(files);
+});
+
+setStatus('Drag & drop PDFs onto this window, or click "Load PDF(s)" to begin.');
+</script>
+</body>
+</html>
